@@ -1,1 +1,437 @@
+---
+title: "GroupProjectMarkdown"
+output: html_document
+date: "2024-11-21"
+---
+Installation and calling of packages
+```{r}
+install.packages("tidyverse")
+install.packages("readxl")
+install.packages("visdat")
+install.packages("naniar")
+install.packages("imputeTS")
+library(readxl)
+library(tidyverse)
+library(visdat)
+library(naniar)
+library(imputeTS)
+```
 
+
+Reading file metadata as CSV and conversion of abundances excel to TSV
+```{r}
+metadata_csv_raw <- read_csv("metadata.csv")
+
+abundances <- read_excel("abundances.xlsx", sheet = 1)
+write.table(abundances, file = "abundances.tsv", sep = "\t", row.names = FALSE, quote = FALSE)
+abundances_tsv_raw <- read_tsv("abundances.tsv")
+```
+
+
+Check class of files
+```{r}
+class(abundances_tsv_raw) #spec_tbl_df / tbl_df / tbl / data.frame
+class(metadata_csv_raw) #spec_tbl_df / tbl_df / tbl / data.frame
+```
+
+
+Exploring data + checking for missing data
+```{r}
+summary(metadata_csv_raw) #min and max 0 means 1 value: HCV, HBV, lymphatic_metastasis, macrovascular_invasion, profiling_data_QC_status, BCLC
+summary(abundances_tsv_raw)
+str(metadata_csv_raw)
+str(abundances_tsv_raw)
+
+
+#check for missing values 
+library(visdat) 
+vis_miss(metadata_csv_raw) #missing values in Tumor_cellularity_(%) (0.5% missing) 
+vis_miss(abundances_tsv_raw) #missing values (22.9% missing)
+
+gg_miss_var(metadata_csv_raw)  
+gg_miss_var(abundances_tsv_raw)
+
+
+#count missing values in metadata
+na_count <- sum(is.na(metadata_csv_raw$`Tumor_cellularity_(%)`))
+na_count #there are 10 missing values out of 101 values
+
+#check which ID's are associated with these NA's
+na_indices <- which(is.na(metadata_csv_raw$`Tumor_cellularity_(%)`))
+na_ids <- metadata_csv_raw$ID[na_indices]
+na_ids
+
+#effective removal of missing continued later during cleaning
+```
+
+
+Data cleaning + new files
+```{r}
+#change BCLC_(stage) to BCLC because brackets could give problems with the code
+colnames(metadata_csv_raw)[colnames(metadata_csv_raw) == "BCLC_(stage)"] <- "BCLC"
+
+#change Diameter_of_tumor_(cm) to Diameter_of_tumor because brackets could give problems with the code
+colnames(metadata_csv_raw)[colnames(metadata_csv_raw) == "Diameter_of_tumor_(cm)"] <- "Diameter_of_tumor" 
+
+#change AFP(>200_ng/ml)(cm) to AFP because brackets could give problems with the code
+colnames(metadata_csv_raw)[colnames(metadata_csv_raw) == "AFP(>200_ng/ml)"] <- "AFP"
+
+#removal of columns with only 1 value
+metadata_csv_clean <- metadata_csv_raw %>% select(-HCV, -Lymphatic_metastasis, -Macrovascular_invasion, -Profiling_data_QC_status, -HBV, -BCLC)
+
+#change gender and other 0-1's to factor: HBV, liver cirrhosis, MVI, AFP, recurr_status, survival_status, BCLC_stage
+metadata_csv_clean$Gender <- as.factor(metadata_csv_clean$Gender) 
+metadata_csv_clean$Liver_cirrhosis <- as.factor(metadata_csv_clean$Liver_cirrhosis) 
+metadata_csv_clean$MVI <- as.factor(metadata_csv_clean$MVI) 
+metadata_csv_clean$AFP <- as.factor(metadata_csv_clean$AFP) 
+metadata_csv_clean$Recurr_status <- as.factor(metadata_csv_clean$Recurr_status) 
+metadata_csv_clean$Survival_status <- as.factor(metadata_csv_clean$Survival_status) 
+
+str(metadata_csv_clean) 
+
+abundances_tsv_clean <- abundances_tsv_raw 
+```
+
+
+Removal of missing data from metadata
+```{r}
+#MCAR: little's MCAR test 
+mcar_test_result <- naniar::mcar_test(metadata_csv_clean) 
+print(mcar_test_result) #result suggest MCAR (p-value 0.08366846)  
+#deletion because the missing data is MCAR and not a lot of missing values 
+
+colnames(metadata_csv_clean)[colnames(metadata_csv_clean) == "Tumor_cellularity_(%)"] <- "Tumor_cellularity"
+
+#removing NA values (missing values)
+metadata_csv_clean <- metadata_csv_clean[!is.na(metadata_csv_clean$Tumor_cellularity), ]
+```
+
+
+Imputation in abundances data
+```{r}
+
+# Split into metadata and patient data
+abundances_metadata <- abundances_tsv_raw %>% select(c("ID", "Protein.names", "Symbol"))
+abundances_patient_data <- abundances_tsv_raw %>% select(-c("ID", "Protein.names", "Symbol"))
+
+#MCAR test for abundances_patient_data
+abundances_mcar_test_result <- naniar::mcar_test(abundances_patient_data) 
+print(abundances_mcar_test_result) #result suggest MCAR (p-value = 1, far above 0.05)
+
+
+#filter columns with too much missing data
+list_filtering_metadata <- list()
+
+for (x in 1:nrow(abundances_metadata)) {
+  NA_amount_row <- sum(is.na(abundances_patient_data[x,]))
+  fractionrowNA <- NA_amount_row/199
+  if (fractionrowNA > 0.05) {
+    list_filtering_metadata[[x]] <- 1
+  } else {
+    list_filtering_metadata[[x]] <- 0
+  }
+    
+}
+#check how many of the rows have more than X% data missing
+table(unlist(list_filtering_metadata))
+#convert list to vector, which you can use to filter the abundances 
+vector_filtering_metadata <- unlist(list_filtering_metadata)
+
+#visual check for filter in abundances
+abundances_testing <- abundances_patient_data[vector_filtering_metadata==0, ]
+vis_miss(abundances_testing)
+
+
+# Separate healthy and tumor samples based on column names
+abundances_healthy_samples <- abundances_patient_data %>% select(contains("P"))
+abundances_tumor_samples <- abundances_patient_data %>% select(contains("T"))
+
+
+# Function to impute missing values using mean imputation
+impute_missing <- function(data) {
+  data %>% mutate_all(~ na_mean(.))
+}
+
+# Apply the imputation to healthy and tumor datasets
+abundances_healthy_samples_imputed <- impute_missing(abundances_healthy_samples)
+abundances_tumor_samples_imputed <- impute_missing(abundances_tumor_samples)
+
+
+
+#check if the missing data is gone
+vis_miss(abundances_healthy_samples_imputed)
+
+dim(abundances_healthy_samples) #conformation no data is lost
+dim(abundances_healthy_samples_imputed) #conformation no data is lost
+
+# Combine and recombine with metadata
+imputed_patient_data <- bind_cols(abundances_healthy_samples_imputed, abundances_tumor_samples_imputed)
+abundances_tsv_imputed <- bind_cols(abundances_metadata, imputed_patient_data)
+
+#filter of abundances imputed tsv
+abundances_tsv_imputed_filtered <- abundances_tsv_imputed[vector_filtering_metadata == 0, ]
+vis_miss(abundances_tsv_imputed_filtered)
+
+vis_miss(abundances_tsv_imputed)
+```
+
+Standardization of data 
+```{r}
+#define standardization function
+standardize <- function(x) {
+    if (sd(x) == 0) {
+        return(x)
+    } else {
+        return((x - mean(x)) / sd(x))
+    }
+}
+
+#copy original dataset
+abundances_tsv_imputed_stand <- abundances_tsv_imputed_filtered
+metadata_csv_clean_stand <- metadata_csv_clean
+
+# identify numerical columns
+numeric_cols_abundances<- sapply(abundances_tsv_imputed_stand, is.numeric)
+  # Diameter_of_tumor as numeric
+metadata_csv_clean_stand$Diameter_of_tumor <- as.numeric(metadata_csv_clean_stand$Diameter_of_tumor) 
+  # delete rows with NA in Diameter_of_tumor
+metadata_csv_clean_stand <- metadata_csv_clean_stand[!is.na(metadata_csv_clean_stand$Diameter_of_tumor), ]
+numeric_cols_metadata <- sapply(metadata_csv_clean_stand, is.numeric)
+
+#apply standardization function on numerical data
+abundances_tsv_imputed_stand[, numeric_cols_abundances] <- lapply(abundances_tsv_imputed_filtered[, numeric_cols_abundances], standardize)
+metadata_csv_clean_stand[, numeric_cols_metadata] <- lapply(metadata_csv_clean_stand[, numeric_cols_metadata], standardize)
+
+
+#check first rows dataset
+head(abundances_tsv_imputed_stand)
+head(metadata_csv_clean_stand)
+
+```
+
+Data visualization (distributions)
+```{r}
+#Age in density plot 
+metadata_csv_clean_stand %>% 
+  ggplot(aes(x=age))+ 
+  geom_density(color="darkblue", fill = "darkblue", alpha=0.5)+ 
+  theme_classic()+ 
+  scale_x_continuous(expand= c(0,0))+ 
+  scale_y_continuous(expand= c(0,0)) 
+#Age in boxpot to detect outliers  
+metadata_csv_clean_stand %>% 
+  ggplot(aes(x = "", y = age)) + 
+  geom_boxplot(color = "darkblue", fill = "lightblue", alpha = 0.5) + 
+  theme_classic() 
+#There are two outliers detected 
+
+
+#Tumor diameter in density plot. Every row with 2 tumors is removed
+metadata_csv_clean_stand <- metadata_csv_clean_stand[metadata_csv_clean_stand$Tumor_number == 1, ] 
+metadata_csv_clean_stand %>% 
+  ggplot(aes(x = Diameter_of_tumor)) +   
+  geom_density(color = "darkblue", fill = "darkblue", alpha = 0.5) +   
+  theme_classic()  
+#Diameter of tumor in boxplot to detect outliers 
+metadata_csv_clean_stand %>% 
+  ggplot(aes(x = "", y = Diameter_of_tumor)) + 
+  geom_boxplot(color = "darkblue", fill = "lightblue", alpha = 0.5) + 
+  theme_classic() 
+#There are no outliers detected 
+
+
+#AFP (ng/ml) in density plot 
+colnames(metadata_csv_clean_stand)[colnames(metadata_csv_clean_stand) == "AFP_(ng/ml)"] <- "AFPcontinuous" 
+metadata_csv_clean_stand %>% 
+  ggplot(aes(x=AFPcontinuous))+ 
+  geom_density(color="darkblue", fill= "darkblue", alpha=0.5)+ 
+  theme_classic() 
+#AFPcontinuous in boxplot to detect outliers 
+metadata_csv_clean_stand %>% 
+  ggplot(aes(x = "", y = AFPcontinuous)) + 
+  geom_boxplot(color = "darkblue", fill = "lightblue", alpha = 0.5) + 
+  theme_classic() 
+#There are 10 outliers detected
+
+
+#Disease free survival in density plot 
+colnames(metadata_csv_clean_stand)[colnames(metadata_csv_clean_stand) == "Disease_free_survival_(m)"] <- "Disease_free_survival" 
+metadata_csv_clean_stand %>% 
+  ggplot(aes(x=Disease_free_survival))+ 
+  geom_density(color="darkblue", fill = "darkblue", alpha=0.5)+ 
+  theme_classic()+ 
+  scale_x_continuous(expand= c(0,0))+ 
+  scale_y_continuous(expand= c(0,0)) 
+#Disease free survival in boxplot to detect outliers 
+metadata_csv_clean_stand %>% 
+  ggplot(aes(x = "", y = Disease_free_survival)) + 
+  geom_boxplot(color = "darkblue", fill = "lightblue", alpha = 0.5) + 
+  theme_classic() 
+#There are no outliers detected 
+
+  
+
+#Total follow-up period in density plot 
+colnames(metadata_csv_clean_stand)[colnames(metadata_csv_clean_stand) == "Total_follow_up_period_(m)"] <- "Total_follow_up_period" 
+metadata_csv_clean_stand %>% 
+  ggplot(aes(x=Total_follow_up_period))+ 
+  geom_density(color="darkblue", fill="darkblue", alpha=0.5)+ 
+  theme_classic()+ 
+  scale_x_continuous(expand= c(0,0))+ 
+  scale_y_continuous(expand= c(0,0)) 
+#Total follow-up period in boxplot to detect outliers 
+metadata_csv_clean_stand %>% 
+  ggplot(aes(x = "", y = Total_follow_up_period)) + 
+  geom_boxplot(color = "darkblue", fill = "lightblue", alpha = 0.5) + 
+  theme_classic() 
+#There is one outlier detected 
+
+
+#Tumor cellularity
+metadata_csv_clean_stand %>% 
+  ggplot(aes(x =Tumor_cellularity)) + 
+  geom_histogram(binwidth = 0.05, color = "darkblue", fill = "darkblue", alpha = 0.5) + 
+  theme_classic() 
+#Tumor cellularity in boxplot to detect outliers 
+metadata_csv_clean_stand %>% 
+  ggplot(aes(x = "", y = Tumor_cellularity)) + 
+  geom_boxplot(color = "darkblue", fill = "lightblue", alpha = 0.5) + 
+  theme_classic() 
+#There are three outliers detected 
+
+
+#Proteomic subtype
+metadata_csv_clean_stand %>% 
+  ggplot(aes(x = Proteomic_Subtype)) + 
+  geom_bar(color = "darkblue", fill = "darkblue", alpha = 0.5) + 
+  theme_classic() 
+
+#Proteomic subtype per age 
+metadata_csv_clean_stand %>% 
+  ggplot(aes(x = age)) + 
+  geom_density(color = "darkblue", fill = "darkblue", alpha = 0.5) + 
+  theme_classic() + 
+  facet_wrap(~ Proteomic_Subtype) 
+
+
+```
+
+Removing outliers 
+```{r} 
+
+#Removing outliers for age 
+
+#Step 1: Calculate IQR and identify outliers 
+Q1 <- quantile(metadata_csv_clean_stand$age, 0.25, na.rm = TRUE) 
+Q3 <- quantile(metadata_csv_clean_stand$age, 0.75, na.rm = TRUE) 
+
+IQR_value <- Q3 - Q1 
+
+  
+
+#Step 2: Define outlier thresholds 
+lower_bound <- Q1 - 1.5 * IQR_value 
+upper_bound <- Q3 + 1.5 * IQR_value 
+
+  
+
+#Step 3: Filter the data to remove outliers 
+metadata_csv_clean_stand_no_outliers <- metadata_csv_clean_stand %>% 
+  filter(age >= lower_bound & age <= upper_bound) 
+
+  
+
+#Step 4: Plot the boxplot without outliers 
+metadata_csv_clean_stand_no_outliers %>% 
+  ggplot(aes(x = "", y = age)) + 
+  geom_boxplot(color = "darkblue", fill = "lightblue", alpha = 0.5) + 
+  theme_classic() 
+
+  
+
+#Removing outliers for AFPcontinuous => this is useless because the values for this parameter have a really big range, so if you remove these outliers you will receive new ones 
+
+#Step 1: Calculate IQR and identify outliers 
+Q1 <- quantile(metadata_csv_clean_stand$AFPcontinuous, 0.25, na.rm = TRUE) 
+Q3 <- quantile(metadata_csv_clean_stand$AFPcontinuous, 0.75, na.rm = TRUE) 
+IQR_value <- Q3 - Q1 
+
+  
+
+#Step 2: Define outlier thresholds 
+lower_bound <- Q1 - 1.5 * IQR_value 
+upper_bound <- Q3 + 1.5 * IQR_value 
+
+  
+
+#Step 3: Filter the data to remove outliers 
+metadata_csv_clean_stand_no_outliers <- metadata_csv_clean_stand %>% 
+  filter(AFPcontinuous >= lower_bound & AFPcontinuous <= upper_bound) 
+
+  
+
+#Step 4: Plot the boxplot without outliers 
+metadata_csv_clean_stand_no_outliers %>% 
+  ggplot(aes(x = "", y = AFPcontinuous)) + 
+  geom_boxplot(color = "darkblue", fill = "lightblue", alpha = 0.5) + 
+  theme_classic() 
+
+  
+
+#Removing outliers for the total follow-up period 
+
+#Step 1: Calculate IQR and identify outliers 
+Q1 <- quantile(metadata_csv_clean_stand$Total_follow_up_period, 0.25, na.rm = TRUE) 
+Q3 <- quantile(metadata_csv_clean_stand$Total_follow_up_period, 0.75, na.rm = TRUE) 
+IQR_value <- Q3 - Q1 
+
+  
+
+#Step 2: Define outlier thresholds 
+lower_bound <- Q1 - 1.5 * IQR_value 
+upper_bound <- Q3 + 1.5 * IQR_value 
+
+  
+
+#Step 3: Filter the data to remove outliers 
+metadata_csv_clean_stand_no_outliers <- metadata_csv_clean_stand %>% 
+  filter(Total_follow_up_period >= lower_bound & Total_follow_up_period <= upper_bound) 
+
+  
+
+#Step 4: Plot the boxplot without outliers 
+metadata_csv_clean_stand_no_outliers %>% 
+  ggplot(aes(x = "", y = Total_follow_up_period)) + 
+  geom_boxplot(color = "darkblue", fill = "lightblue", alpha = 0.5) + 
+  theme_classic() 
+
+  
+
+#Removing outliers for the tumor cellularity 
+
+#Step 1: Calculate IQR and identify outliers  
+Q1 <- quantile(metadata_csv_clean_stand$Tumor_cellularity, 0.25, na.rm = TRUE) 
+Q3 <- quantile(metadata_csv_clean_stand$Tumor_cellularity, 0.75, na.rm = TRUE) 
+IQR_value <- Q3 - Q1 
+
+  
+
+#Step 2: Define outlier thresholds 
+lower_bound <- Q1 - 1.5 * IQR_value 
+upper_bound <- Q3 + 1.5 * IQR_value 
+
+  
+
+#Step 3: Filter the data to remove outliers 
+metadata_csv_clean_stand_no_outliers <- metadata_csv_clean_stand %>% 
+  filter(Tumor_cellularity >= lower_bound & Tumor_cellularity <= upper_bound) 
+
+  
+
+#Step 4: Plot the boxplot without outliers 
+metadata_csv_clean_stand_no_outliers %>% 
+  ggplot(aes(x = "", y = Tumor_cellularity)) + 
+  geom_boxplot(color = "darkblue", fill = "lightblue", alpha = 0.5) + 
+  theme_classic() 
+
+``` 
