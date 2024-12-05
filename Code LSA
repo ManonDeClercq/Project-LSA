@@ -161,8 +161,8 @@ abundances_tumor_samples_imputed <- impute_missing(abundances_tumor_samples)
 #check if the missing data is gone
 vis_miss(abundances_healthy_samples_imputed)
 
-dim(abundances_healthy_samples) #conformation no data is lost
-dim(abundances_healthy_samples_imputed) #conformation no data is lost
+dim(abundances_healthy_samples) #confirmation no data is lost
+dim(abundances_healthy_samples_imputed) #confirmation no data is lost
 
 # Combine and recombine with metadata
 imputed_patient_data <- bind_cols(abundances_healthy_samples_imputed, abundances_tumor_samples_imputed)
@@ -435,3 +435,176 @@ metadata_csv_clean_stand_no_outliers %>%
   theme_classic() 
 
 ``` 
+
+
+
+DIFFERENTIAL EXPRESSION ANALYSIS
+
+Principal component analysis enzo
+```{r}
+#install bioconductor
+if (!requireNamespace("BiocManager", quietly = TRUE)) {
+  install.packages("BiocManager")
+  BiocManager::install(version = "3.12")}
+
+
+BiocManager::install("edgeR")
+library(edgeR)
+
+
+library(tibble)
+#abundances_test_imputed_stand is latest
+# if no standardization needed, use abundances_tsv_imputed_filtered
+```
+
+Filter data (tibble conversion to matrix)
+```{r}
+#can use already NA-filtered and imputed data (confirmed by assistant)
+#use abundances_tsv_imputed_filtered
+head(abundances_tsv_imputed_filtered) #check datatype: is tibble
+
+#remove the protein_names and symbol, and keep a separate one with them
+abundances_DEA_MetaRemoved <- abundances_tsv_imputed_filtered %>% select(-c("Protein.names","Symbol"))
+abundances_DEA_MetaMaintained <- abundances_tsv_imputed_filtered %>% select(c("ID","Protein.names","Symbol")) #ID also kept for later matching
+
+
+abundances_matrix <- as.matrix(column_to_rownames(abundances_DEA_MetaRemoved,"ID"))
+class(abundances_matrix) #is a matrix
+abundances_matrix[1:5,1:5] #seems to properly maintain ID and sample names
+
+#make a list with every sample from abundances and then type them according to name, make this a table
+abundances_sample_type_name <- colnames(abundances_matrix)
+abundances_sample_type_table <-  data.frame(Column_name = abundances_sample_type_name)
+abundances_sample_type_table #works as intended
+
+#now add P or T based on name
+abundances_sample_type_table <- abundances_sample_type_table %>%
+  mutate(type = case_when(
+    grepl("P", Column_name) ~ "P",
+    grepl("T", Column_name) ~ "T",
+    TRUE ~ NA_character_
+  ))
+print(abundances_sample_type_table) #makes a proper table
+
+
+
+abundances_dge <- DGEList(counts = abundances_matrix, group = abundances_sample_type_table$type)
+dim(abundances_dge) #seems to be properly working
+abundances_dge
+```
+
+
+NORMALIZATION NEEDED BECAUSE BATCH EFFECT. agglomeration of several  
+filter and impute first, then should normalize, then standardize
+
+normalize
+```{r}
+#use TMM method from edgeR package
+abundances_dge_normalized <- calcNormFactors(abundances_dge, method = "TMM")
+head(abundances_dge_normalized$samples) #seems to have changed the norm factors
+
+cpm_matrix <- cpm(abundances_dge_normalized)
+plot(abundances_dge_normalized$counts["O95210",],cpm_matrix["O95210",])
+plot(abundances_dge$counts["O95210",],cpm_matrix["O95210",])
+
+```
+
+
+```{r}
+#seems to be in order, is a check
+#is this really needed? you have the voom function that you can use
+log_cpm_matrix <- cpm(abundances_dge_normalized, log=TRUE, prior.count=0.1)
+plot(abundances_dge_normalized$counts["P32754",],log_cpm_matrix["P32754",])
+
+```
+
+standardize (use standard scaling because outliers)
+ACTUALLY, DON'T STANDARDIZE; messes up any attempt at DEA (introduces negative values), and is also stated by chatGPT to NOT be done because you want the raw biological counts to be maintained
+```{r}
+
+# Copy the DGEList
+##abundances_dge_normalized_stand <- abundances_dge_normalized
+
+# Extract the counts component for standardization
+##counts_matrix <- abundances_dge_normalized_stand$counts
+
+# Identify numeric columns (for a matrix, all columns are numeric, so this is redundant)
+##numeric_cols_abundances_dge <- sapply(as.data.frame(counts_matrix), is.numeric)
+
+# Apply standardization only to the counts component
+##abundances_dge_normalized_stand$counts <- apply(counts_matrix, 2, standardize)
+
+# Check the result
+##head(abundances_dge_normalized_stand$counts)
+
+
+```
+
+
+Log transform
+```{r}
+log_voom_matrix <- voom(abundances_dge_normalized)
+
+```
+
+
+Dimensionality reduction quality control (MDS or PCA)
+ga wss de groeping zien obv groep (dat is hoe ze de groups in paper hebben gevonden)
+```{r}
+color_type <- as.numeric(as.factor(abundances_sample_type_table$type))
+plotMDS(log_voom_matrix, labels = NULL, pch=20, col=color_type)
+
+
+legend("topright", 
+       legend = levels(as.factor(abundances_sample_type_table$type)), 
+       col = 1:length(levels(as.factor(abundances_sample_type_table$type))), 
+       pch = 20, 
+       title = "Sample Types")
+
+
+```
+
+
+Differential Expression Analysis 
+```{r}
+#defining design matrix
+design <- model.matrix(~0 + type, data=abundances_sample_type_table) # if you leave out the 0 in this command (try!!!), you will see that you will get a different design matrix (the 0 is used to ask for a model without intercept)
+print(design[1:5,])
+
+
+#defining contrast matrix
+contrast.matrix_PT <- makeContrasts(contrast1=typeP-typeT, levels=design)
+print(contrast.matrix_PT)
+
+#fitting the expression matrix to linear models
+fit <- lmFit(log_voom_matrix, design)
+#compute contrast
+fit_PT <- contrasts.fit(fit, contrast.matrix_PT)
+#Bayes statistic of differential expression
+fit_PT <- eBayes(fit_PT)
+```
+Obtaining DEA results table
+```{r}
+
+topprot <- topTable(fit_PT, coef=1, number=Inf) # by putting the argument number=Inf a table with the results for all genes will be generated
+dim(topprot)
+
+#top20
+top20prot <- topTable(fit_PT, coef=1, number=20) # a table with only top 20 (most differentially expressed) genes will be generated
+dim(top20prot)
+
+#significant genes
+topsignprot <- topTable(fit_PT, coef=1, number=Inf, p.value=0.05) # you can also make a table with only the significant genes (based on adjusted p-value)
+dim(topsignprot) # as we are comparing here very different diseases, there are really a lot differentially expressed genes
+head(topprot)
+top20prot
+
+
+```
+
+VOLCANOPLOT
+```{r}
+
+volcanoplot(fit_PT, coef=1, highlight = 100, names=rownames(fit_PT))
+```
+
