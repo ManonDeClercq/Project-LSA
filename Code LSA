@@ -400,25 +400,21 @@ metadata_csv_clean_stand_no_outliers %>%
 
 
 DIFFERENTIAL EXPRESSION ANALYSIS
-
-Principal component analysis enzo
+Installation of packages
 ```{r}
 #Install bioconductor
 if (!requireNamespace("BiocManager", quietly = TRUE)) {
   install.packages("BiocManager")
   BiocManager::install(version = "3.12")}
 
-
 BiocManager::install("edgeR")
 library(edgeR)
 
-
 library(tibble)
-#abundances_test_imputed_stand is latest
-#if no standardization needed, use abundances_tsv_imputed_filtered
+#start from abundances_tsv_imputed_filtered
 ```
 
-Filter data (tibble conversion to matrix)
+Filter data (tibble conversion to matrix, required for design and contrast matrix)
 ```{r}
 #Can use already NA-filtered and imputed data (confirmed by assistant)
 #Use abundances_tsv_imputed_filtered
