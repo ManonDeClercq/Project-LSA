@@ -18,29 +18,29 @@ print(metadata.describe())
 print(abundances.describe())
 
 
-#combineer datasets
+#combine datasets
 
-# Combineer datasets op basis van de index
+# Combine datasets based on index
 combined_data = pd.concat([metadata, abundances.reset_index()], axis=1)
 
 # Inspect combined dataset
 print(combined_data.head())
 
-#0 voor missing values
+#0 for missing values
 combined_data.fillna(0, inplace=True)
 
-# Definieer target (doelvariabele) en features
+# Define target variable and features
 target = 'Diameter_of_tumor_(cm)'
-y = combined_data[target]  # Doelvariabele
+y = combined_data[target]  # Target variable
 X = combined_data[['AFP_(ng/ml)', 'Macrovascular_invasion']]  # Features
 
 
-#split data in training en testing sets
+#split data in training and testing sets
 from sklearn.model_selection import train_test_split
 
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-#Als je waarden zoals '1.2+1.5' als gemiddelde wilt nemen:
+#Make data like '1.2+1.5' as mean:
 def parse_to_float(value):
     try:
         # Check if '+' is in the string and calculate the mean of the numbers
@@ -55,12 +55,11 @@ def parse_to_float(value):
 # Apply parsing 
 y_train = y_train.apply(parse_to_float)
 y_test = y_test.apply(parse_to_float)
-
 y = y.apply(parse_to_float)
 X = X.apply(parse_to_float)
 
 
-# Vul missende waarden met 0 
+#0 for missing values
 X_train.fillna(0, inplace=True)
 X_test.fillna(0, inplace=True)
 
@@ -84,17 +83,17 @@ print(melbourne_model.predict(X.head()))
 model = RandomForestRegressor(random_state=42)
 model.fit(X_train, y_train)
 
-# Voorspellingen maken
+# Predictions 
 y_pred = model.predict(X_test)
 
-# Model evalueren
+# Evaluate model
 mse = mean_squared_error(y_test, y_pred)
 r2 = r2_score(y_test, y_pred)
 
 print(f"Mean Squared Error: {mse:.2f}")
 print(f"R² Score: {r2:.2f}")
 
-# Belangrijkste features visualiseren
+# Visualise important features
 import matplotlib.pyplot as plt
 
 feature_importances = pd.Series(model.feature_importances_, index=X.columns)
