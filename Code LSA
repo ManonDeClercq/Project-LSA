@@ -321,47 +321,6 @@ metadata_csv_clean_stand %>%
 
 Removing outliers 
 ```{r} 
-
-#Removing outliers for AFPcontinuous. This is useless because the values for this parameter have a really big range, so if you remove these outliers you will receive new ones 
-#Step 1: Calculate IQR and identify outliers 
-Q1 <- quantile(metadata_csv_clean_stand$AFPcontinuous, 0.25, na.rm = TRUE) 
-Q3 <- quantile(metadata_csv_clean_stand$AFPcontinuous, 0.75, na.rm = TRUE) 
-IQR_value <- Q3 - Q1 
-
-#Step 2: Define outlier thresholds 
-lower_bound <- Q1 - 1.5 * IQR_value 
-upper_bound <- Q3 + 1.5 * IQR_value 
-
-#Step 3: Filter the data to remove outliers 
-metadata_csv_clean_stand_no_outliers <- metadata_csv_clean_stand %>% 
-  filter(AFPcontinuous >= lower_bound & AFPcontinuous <= upper_bound) 
-
-#Step 4: Plot the boxplot without outliers 
-metadata_csv_clean_stand_no_outliers %>% 
-  ggplot(aes(x = "", y = AFPcontinuous)) + 
-  geom_boxplot(color = "darkblue", fill = "lightblue", alpha = 0.5) + 
-  theme_classic() 
-
-#Removing outliers for the total follow-up period 
-#Step 1: Calculate IQR and identify outliers 
-Q1 <- quantile(metadata_csv_clean_stand$Total_follow_up_period, 0.25, na.rm = TRUE) 
-Q3 <- quantile(metadata_csv_clean_stand$Total_follow_up_period, 0.75, na.rm = TRUE) 
-IQR_value <- Q3 - Q1 
-
-#Step 2: Define outlier thresholds 
-lower_bound <- Q1 - 1.5 * IQR_value 
-upper_bound <- Q3 + 1.5 * IQR_value 
-
-#Step 3: Filter the data to remove outliers 
-metadata_csv_clean_stand_no_outliers <- metadata_csv_clean_stand %>% 
-  filter(Total_follow_up_period >= lower_bound & Total_follow_up_period <= upper_bound) 
-
-#Step 4: Plot the boxplot without outliers 
-metadata_csv_clean_stand_no_outliers %>% 
-  ggplot(aes(x = "", y = Total_follow_up_period)) + 
-  geom_boxplot(color = "darkblue", fill = "lightblue", alpha = 0.5) + 
-  theme_classic() 
-
 #Removing outliers for the tumor cellularity 
 #Step 1: Calculate IQR and identify outliers  
 Q1 <- quantile(metadata_csv_clean_stand$Tumor_cellularity, 0.25, na.rm = TRUE) 
