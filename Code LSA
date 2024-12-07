@@ -343,6 +343,157 @@ metadata_csv_clean_stand_no_outliers %>%
 ``` 
 
 
+Hypothesis 1
+Making a correlation matrix to see which parameters are correlated with each other
+```{r}
+numeric_vars <- sapply(metadata_csv_clean_no_outliers, is.numeric) # Identify numeric variables
+correlation_matrix <- cor(metadata_csv_clean_no_outliers[numeric_vars], use="pairwise.complete.obs")
+install.packages("ggcorrplot")
+library(ggcorrplot)
+ggcorrplot(correlation_matrix, lab = TRUE, title = "Correlation Matrix", outline.col = "white")
+```
+This matrix shows that the diameter of the tumor is correlated with AFPcontinuous and MVI. MVI and AFPcontinuous also show a small correlation. Therefore, the influence of the presence of MVI and the concentration of AFP is tested on the diameter of the tumor. 
+
+H0: THere is no correlation between MVI and AFPcontinuous on the diameter of the tumor.
+H1: There is a correlation between MVI and AFPcontinuous on the diameter of the tumor.
+
+Checking whether a linear regression model can be used for the first hypothesis.
+```{r}
+#1: Linear correlation = lineair correlation
+ggplot(metadata_csv_clean_no_outliers, aes(x = Diameter_of_tumor, y = AFPcontinuous, color = factor(MVI))) + 
+  geom_point(size = 3) +              
+  labs(title = "Tumor diameter vs AFPcontinuous",                
+       x = "Tumor diameter (cm)",                      
+       y = "AFP (ng/mL)") +
+  scale_color_manual(values = c("orange","green"), labels = c("No MVI", "MVI"))
+
+#Linear correlation with log for AFPcontinuous
+ggplot(metadata_csv_clean_no_outliers, aes(x = Diameter_of_tumor, y = log(AFPcontinuous), color = factor(MVI))) + 
+  geom_point(size = 3) +              
+  labs(title = "Tumor diameter vs log(AFPcontinuous)",                
+       x = "Tumor diameter (cm)",                      
+       y = "log(AFP (ng/mL))") +
+  scale_color_manual(values = c("orange","green"), labels = c("No MVI", "MVI"))
+
+#Linear correlation with log for tumor diameter
+ggplot(metadata_csv_clean_no_outliers, aes(x = log(Diameter_of_tumor), y = AFPcontinuous, color = factor(MVI))) + 
+  geom_point(size = 3) +              
+  labs(title = "log(Tumor diameter) vs AFPcontinuous",                
+       x = "log(Tumor diameter (cm))",                      
+       y = "AFP (ng/mL)") +
+  scale_color_manual(values = c("orange","green"), labels = c("No MVI", "MVI"))
+
+#Linear correlation with log for AFPcontinuous and the tumor diameter
+ggplot(metadata_csv_clean_no_outliers, aes(x = log(Diameter_of_tumor), y = log(AFPcontinuous), color = factor(MVI))) + 
+  geom_point(size = 3) +              
+  labs(title = "log(Tumor diameter) vs log(AFPcontinuous)",                
+       x = "log(Tumor diameter (cm))",                      
+       y = "log(AFP (ng/mL))") +
+  scale_color_manual(values = c("orange","green"), labels = c("No MVI", "MVI"))
+
+#2: Homoscedasticity
+#The plot generated for linearity has a funnel shape, so this indicates heteroscedasticity. This is not illogical since the dispersion of AFPcontinuous will be larger with a larger diameter and the dispersion of AFPcontinuous will be smaller with a smaller diameter. 
+
+#Based on linearity and heteroscedasticity, a linear regression model cannot be plotted so we will switch to a glm model.
+model <- lm(Diameter_of_tumor ~ AFPcontinuous + MVI, data = metadata_csv_clean_no_outliers)
+predictions <- predict(model)
+residuals <- residuals(model)
+
+plot(predictions, residuals, main = "Residuals vs Predicted values",
+     xlab = "Predicted values",
+     ylab = "Residuals",
+     pch = 19,
+     col = "blue") # Plot the residuals against the predicted values
+
+abline(h = 0, col = "red", lwd = 2) # Ad a horizontal line on y = 0
+#In this graph there is definitely a funnel shape present, so the data is heteroscedastic.
+
+#Other way to look at the homoscedasticity 
+install.packages("lmtest")
+library(lmtest)
+
+bptest(model)
+#The Breusch-Pagan test is a formal statistical test for homoscedasticity where the null hypothesis of the test states that there is no heteroscedasticity. 
+#In this case the p-value > 0,05, namely 0,6037, so means that the data is heteroscedastic, there is an unequal spread of the data.
+
+#3: Normality of residuals
+#Normality of only the tumor diameter (QQplot)
+qqnorm(metadata_csv_clean_no_outliers$Diameter_of_tumor)
+qqline(metadata_csv_clean_no_outliers$Diameter_of_tumor, col = "red")
+
+#Second way of visualization of the normality of the tumor diameter (QQplot)
+install.packages("ggpubr")
+library(ggpubr)
+ggqqplot(metadata_csv_clean_no_outliers$Diameter_of_tumor)
+
+#Third way of visualizing the normality of the tumor diameter (histogram)
+bw <- 0.6
+ggplot(metadata_csv_clean_no_outliers, aes(x = Diameter_of_tumor))+
+  geom_histogram(binwidth = bw, fill = "lightgrey")+
+  stat_function(fun = function(x){dnorm(x, mean = mean(metadata_csv_clean_no_outliers$Diameter_of_tumor),
+                                        sd = sd(metadata_csv_clean_no_outliers$Diameter_of_tumor))* bw * length(metadata_csv_clean_no_outliers$Diameter_of_tumor)}, color = "yellow", size = 1)+
+  theme_classic()+
+  ggtitle("Diameter of tumor")+
+  ylab("Abundance")
+#Even if the "bw" is changed to different values, the data is never normally distributed. 
+
+#Performing an extra test, the Shapiro-Wilk normality test, to check whether or not the tumor diameter is normally distributed.
+shapiro.test(metadata_csv_clean_no_outliers$Diameter_of_tumor)
+#The p-value > 0,05, so the null hypothesis cannot be rejected, this mean that the tumor diameter is normally distributed.
+
+#Normality of the whole model, so with parameters tumor diameter, MVI and AFP
+model2 <- lm(Diameter_of_tumor ~ AFPcontinuous + MVI, data = metadata_csv_clean_no_outliers)
+residuen <- residuals(model2)
+
+qqnorm(residuen)
+qqline(residuen, col = "red")
+
+#4: No multicollinearity
+model3 <- lm(Diameter_of_tumor ~ AFPcontinuous + MVI, data = metadata_csv_clean_no_outliers)
+install.packages("car")
+library(car)
+vif(model3)
+#These values are below the typical threshold of 10, indicating that there is no significant multicollinearity between AFPcontinuous and MVI in your model. This means that both predictors can be used together without causing issues due to collinearity.
+
+#5: Independence of the residuals (auto-correlation)
+model4 <- lm(Diameter_of_tumor ~ AFPcontinuous + MVI, data = metadata_csv_clean_no_outliers)
+residuals <- residuals(model4)
+
+plot(residuals, 
+     main = "Residuals vs. Order of the data", 
+     xlab = "Observation Number", 
+     ylab = "Residuals", 
+     pch = 19, 
+     col = "blue") #Plot residuals against their order
+
+abline(h = 0, col = "red") #Add a horizontal line on y = 0
+
+#Extra test to check the auto-correlation with the Durbin-Watson test
+install.packages("lmtest")
+library(lmtest)
+dwtest(model)
+
+#The residuals need to be independent, so no pattern or correlation can be seen. After performing the Durbin-Watson test, the p-value is 0,03536, so p-value < 0,05. This means that there is an auto-correlation, because the H0 in this test states that the residuals are independent.
+```
+
+Linear regression model cannot be used because four of the five parameters are not fulfilled. The only parameter that is fulfilled is the normal distribution of the tumor diameter. This means that a logistic regression model has to be used to be able to prove significant difference.
+
+Logistic regession model for the tumor diameter, MVI and AFP
+```{r}
+#Logistic regression model for tumor diameter, AFP and MVI
+model5 <- glm(Diameter_of_tumor ~ AFPcontinuous * MVI, 
+             family = gaussian(link = "identity"), data = metadata_csv_clean_no_outliers)
+summary(model5)
+model5$deviance/model5$null.deviance
+
+model6 <- glm(Diameter_of_tumor ~ AFPcontinuous * MVI, 
+             family = Gamma(link = "log"), data = metadata_csv_clean_no_outliers) #Betere R squared. Als Diameter_of_tumor alleen positieve waarden heeft en variabiliteit toeneemt met de grootte van de waarde, kun je een Gamma-verdeling proberen.
+summary(model6)
+model6$deviance/model6$null.deviance
+```
+The interaction between MVI and AFPcontinuous on the tumor diameter is not significant, because the p-value > 0,05, namely 0,173.
+
+
 
 DIFFERENTIAL EXPRESSION ANALYSIS
 Installation of packages
