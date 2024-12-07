@@ -116,7 +116,6 @@ mcar_test_result <- naniar::mcar_test(metadata_csv_clean)
 print(mcar_test_result) #result suggest MCAR (p-value 0.08366846)  
 #deletion because the missing data is MCAR and not a lot of missing values 
 
-colnames(metadata_csv_clean)[colnames(metadata_csv_clean) == "Tumor_cellularity_(%)"] <- "Tumor_cellularity"
 
 #Removing NA values (missing values)
 metadata_csv_clean <- metadata_csv_clean[!is.na(metadata_csv_clean$Tumor_cellularity), ]
@@ -125,7 +124,6 @@ metadata_csv_clean <- metadata_csv_clean[!is.na(metadata_csv_clean$Tumor_cellula
 
 Imputation in abundances data
 ```{r}
-
 # Split into metadata and patient data
 abundances_metadata <- abundances_tsv_raw %>% select(c("ID", "Protein.names", "Symbol"))
 abundances_patient_data <- abundances_tsv_raw %>% select(-c("ID", "Protein.names", "Symbol"))
@@ -239,7 +237,7 @@ metadata_csv_clean_stand %>%
   ggplot(aes(x = "", y = age)) + 
   geom_boxplot(color = "darkblue", fill = "lightblue", alpha = 0.5) + 
   theme_classic() 
-#There are two outliers detected 
+##There are two outliers detected of two people who are 24 and 25 years old, but this data will not be excluded because it might still be relevant.
 
 
 #Tumor diameter in density plot. Every row with 2 tumors is removed
