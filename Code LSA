@@ -76,6 +76,22 @@ colnames(metadata_csv_raw)[colnames(metadata_csv_raw) == "Diameter_of_tumor_(cm)
 #Change AFP(>200_ng/ml)(cm) to AFP because brackets could give problems with the code
 colnames(metadata_csv_raw)[colnames(metadata_csv_raw) == "AFP(>200_ng/ml)"] <- "AFP"
 
+#change Tumor_cellularity_(%) to Tumor_cellularity because brackets could give problems with the code
+colnames(metadata_csv_clean)[colnames(metadata_csv_clean) == "Tumor_cellularity_(%)"] <- "Tumor_cellularity"
+
+#change AFP_(ng/ml) to AFPcontinuous because brackets could give problems with the code
+colnames(metadata_csv_clean_stand)[colnames(metadata_csv_clean_stand) == "AFP_(ng/ml)"] <- "AFPcontinuous"
+
+#change Disease_free_survival_(m) to Disease_free_survival because brackets could give problems with the code
+colnames(metadata_csv_clean_stand)[colnames(metadata_csv_clean_stand) == "Disease_free_survival_(m)"] <- "Disease_free_survival" 
+
+#change Total_follow_up_period(m) to Total_follow_up_period because brackets could give problems with the code
+colnames(metadata_csv_clean_stand)[colnames(metadata_csv_clean_stand) == "Total_follow_up_period_(m)"] <- "Total_follow_up_period" 
+metadata_csv_clean_stand %>% 
+
+#removal of all rows with 2 tumors, because this gives a problem in the column of the diameter of the tumors, where these diameters are shown with a + in between. Since only 7 patients have 2 tumors of the 101 patients in this dataset, these can be removed.
+metadata_csv_clean_stand <- metadata_csv_clean_stand[metadata_csv_clean_stand$Tumor_number == 1, ] 
+
 #Removal of columns with only 1 value
 metadata_csv_clean <- metadata_csv_raw %>% select(-HCV, -Lymphatic_metastasis, -Macrovascular_invasion, -Profiling_data_QC_status, -HBV, -BCLC)
 
