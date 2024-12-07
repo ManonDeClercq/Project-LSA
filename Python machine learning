@@ -1,1 +1,103 @@
+# Import library
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_squared_error, r2_score
+import numpy as np
 
+# Save filepath to variable for easier access
+metadata_file_path = r'/kaggle/input/metadata/metadata.csv'
+abundances_file_path = r'/kaggle/input/abundances/abundances.xlsx'
+
+# Read the data and store data in a DataFrame
+metadata = pd.read_csv(metadata_file_path)
+abundances = pd.read_excel(abundances_file_path)
+
+# Print a summary of the data
+print(metadata.describe())
+print(abundances.describe())
+
+
+#combineer datasets
+
+# Combineer datasets op basis van de index
+combined_data = pd.concat([metadata, abundances.reset_index()], axis=1)
+
+# Inspect combined dataset
+print(combined_data.head())
+
+#0 voor missing values
+combined_data.fillna(0, inplace=True)
+
+# Definieer target (doelvariabele) en features
+target = 'Diameter_of_tumor_(cm)'
+y = combined_data[target]  # Doelvariabele
+X = combined_data[['AFP_(ng/ml)', 'Macrovascular_invasion']]  # Features
+
+
+#split data in training en testing sets
+from sklearn.model_selection import train_test_split
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+#Als je waarden zoals '1.2+1.5' als gemiddelde wilt nemen:
+def parse_to_float(value):
+    try:
+        # Check if '+' is in the string and calculate the mean of the numbers
+        if '+' in str(value):
+            numbers = [float(v) for v in value.split('+')]
+            return sum(numbers) / len(numbers)
+        else:
+            return float(value)  # Convert directly to float if no '+'
+    except ValueError:
+        return np.nan  # Return NaN for invalid values
+
+# Apply parsing 
+y_train = y_train.apply(parse_to_float)
+y_test = y_test.apply(parse_to_float)
+
+y = y.apply(parse_to_float)
+X = X.apply(parse_to_float)
+
+
+# Vul missende waarden met 0 
+X_train.fillna(0, inplace=True)
+X_test.fillna(0, inplace=True)
+
+#DescisionTreeRegressor model #model1
+from sklearn.tree import DecisionTreeRegressor
+
+# Define model. Specify a number for random_state to ensure same results each run
+melbourne_model = DecisionTreeRegressor(random_state=1)
+
+# Fit model
+melbourne_model.fit(X, y)
+
+
+print(X.head())
+print("The predictions are")
+print(melbourne_model.predict(X.head()))
+
+
+#RandomForestRegressor model #model2
+# Train een Random Forest Regressor model
+model = RandomForestRegressor(random_state=42)
+model.fit(X_train, y_train)
+
+# Voorspellingen maken
+y_pred = model.predict(X_test)
+
+# Model evalueren
+mse = mean_squared_error(y_test, y_pred)
+r2 = r2_score(y_test, y_pred)
+
+print(f"Mean Squared Error: {mse:.2f}")
+print(f"R² Score: {r2:.2f}")
+
+# Belangrijkste features visualiseren
+import matplotlib.pyplot as plt
+
+feature_importances = pd.Series(model.feature_importances_, index=X.columns)
+feature_importances.nlargest(2).plot(kind="barh")
+plt.title("Feature Importances")
+plt.show()
