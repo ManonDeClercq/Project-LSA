@@ -110,6 +110,7 @@ plt.show()
 
 
 #updated code
+#Only on tumor data from abundances
 # Import libraries
 import pandas as pd
 from sklearn.model_selection import train_test_split
@@ -133,6 +134,10 @@ combined_data = pd.concat([metadata, abundances.reset_index()], axis=1)
 
 # Fill missing values with 0
 combined_data.fillna(0, inplace=True)
+
+#Remove LxxxP data
+patient_columns = [col for col in abundances.columns if col.endswith('P') and col.startswith('L')]
+abundances_dropped = abundances.drop(columns=patient_columns)
 
 # Define target variable and features
 target = 'Diameter_of_tumor_(cm)'
