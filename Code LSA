@@ -643,7 +643,6 @@ abundances_dge <- DGEList(counts = abundances_matrix, group = abundances_sample_
 abundances_dge_norm <- calcNormFactors(abundances_dge, method = "TMM") 
 #possibly use TMM method
 
-prot_log_orderLookalike <- abundances_dge_norm$counts
 ```
 
 Log transform
