@@ -553,15 +553,15 @@ log_voom_matrix_unpaired <- voom(abundances_dge_normalized)
 Differential Expression Analysis 
 ```{r}
 #defining design matrix
-design <- model.matrix(~0 + Condition, data=abundances_sample_type_table) 
+design_modeled_unpaired <- model.matrix(~0 + Condition, data=abundances_sample_type_table) 
 
 #defining contrast matrix
-contrast.matrix_PT <- makeContrasts(contrast1=ConditionP-ConditionT, levels=design)
+contrast.matrix_PT <- makeContrasts(contrast1=ConditionP-ConditionT, levels=design_modeled_unpaired)
 print(contrast.matrix_PT)
 
 
 #fitting the expression matrix to linear models
-fit <- lmFit(log_voom_matrix_unpaired, design)
+fit <- lmFit(log_voom_matrix_unpaired, design_modeled_unpaired)
 #compute contrast
 fit_PT <- contrasts.fit(fit, contrast.matrix_PT)
 #Bayes statistic of differential expression
@@ -613,22 +613,17 @@ Design matrix creation based on abundances_sample_type table
 ```{r}
 
 #preprocessing step to get abundances_sample_type_table in right order
-df_design <- abundances_sample_type_table%>%group_by(Column_name,Subject,Condition)%>%summarise(n=n(),.groups = "drop")%>%select(-n)
+design_dataframe_paired <- unique(abundances_sample_type_table[, c("Column_name", "Subject", "Condition")])
 
-#assign subject (pairs) and Condition (cancer or not)
-Subject <- factor(df_design$Subject)
-Condition <- factor(df_design$Condition, levels = c("P","T"))
-
-
+#assign subject (Without the P or T) and Condition (Patient or Tumor)
+Subject <- factor(design_dataframe_paired$Subject)
+Condition <- factor(design_dataframe_paired$Condition, levels = c("P","T"))
 
 #design matrix regular using limma user guide
-design_matrix <- model.matrix(~Condition + Subject) 
-print(design_matrix)
-
+design_matrix_modeled_paired <- model.matrix(~Condition + Subject)
 
 #Contrast designMatrix using chatGPT and limma user guide
-design_matrix_PreContrast <- model.matrix(~ 0 + Condition + Subject)
-design_matrix_PreContrast
+design_matrix_PreContrast_paired <- model.matrix(~ 0 + Condition + Subject)
 ```
 
 
@@ -654,6 +649,14 @@ log_voom_matrix_paired <- voom(abundances_dge_norm, plot = TRUE)
 Log transform gives us the log_voom_matrix_paired
 
 
+Turning matrix into DF and Fixing order of log_voom_matrix_paired
+```{r}
+log_voom_df_expr <- as.data.frame(log_voom_matrix_paired$E) %>%
+  rownames_to_column(var = "ID") 
+
+```
+
+
 
 Dimensionality reduction quality control (MDS or PCA)
 ```{r}
@@ -671,42 +674,42 @@ legend("topright",
 From PCA: the tumor samples seem to be super spread out, indicating that each tumor has very different expression patterns?
 
 
+
+
 Actual DEA fitting
 ```{r}
-#Original Code for non-contrast matrix
-fit2 <- lmFit(log_voom_matrix_paired, design_matrix)
-fit2 <- eBayes(fit2)
-results2 <- topTable(fit2, coef ="ConditionT", adjust.method = "BH")
-results2
+#Original Code for non-contrast matrix en resultaat
+fitnoncontrast <- lmFit(log_voom_df_expr, design_matrix_modeled_paired)
+fitnoncontrast <- eBayes(fitnoncontrast)
+resultsnoncontrast <- topTable(fitnoncontrast, coef ="ConditionT", adjust.method = "BH", number = Inf)
 
 
-#Code for contrast matrix
-fitcontrast <- lmFit(log_voom_matrix_paired, design_matrix_PreContrast)
 
-contrast_matrix <- makeContrasts(P_vs_T = ConditionT - ConditionP, levels = design_matrix_PreContrast)
-
+#Code for contrast matrix en resultaat
+fitcontrast <- lmFit(log_voom_df_expr, design_matrix_PreContrast_paired)
+contrast_matrix <- makeContrasts(P_vs_T = ConditionT - ConditionP, levels = design_matrix_PreContrast_paired)
 fitcontrast <- contrasts.fit(fitcontrast, contrast_matrix)
 fitcontrast <- eBayes(fitcontrast)
+resultscontrast <- topTable(fitcontrast, coef = "P_vs_T", adjust.method = "BH", number = Inf)
 
-
-#results <- decideTests(fit)
-#help("decideTests")
-#need to add contrast matrix and such, then run against previous code to see if there's a difference.
 ```
 DEA results 
 ```{r}
-resultscontrast <- topTable(fitcontrast, coef = "P_vs_T", adjust.method = "BH", number = Inf)
 resultscontrast
+resultsnoncontrast
 
-#adjusted p-values compleet non-significant; wat echt raar is wanneer je het vergelijkt met de eerdere code van non-paired
+identical(resultscontrast, resultsnoncontrast)
+#supposedly not the same, but seem VERY similar
 
 ```
 
 
 VOLCANOPLOT
 ```{r}
-
+volcanoplot(fitnoncontrast, coef=1, highlight = 100, names=rownames(fitnoncontrast))
 volcanoplot(fitcontrast, coef=1, highlight = 100, names=rownames(fitcontrast))
+
+#the volcanoplots are different
 ```
 
 
