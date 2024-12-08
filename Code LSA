@@ -418,13 +418,20 @@ bptest(model)
 
 #3: Normality of residuals
 #Normality of only the tumor diameter (QQplot)
-qqnorm(metadata_csv_clean_no_outliers$Diameter_of_tumor)
+qqnorm(metadata_csv_clean_no_outliers$Diameter_of_tumor, 
+       main = "Q-Q Plot: Tumor Diameter",
+       xlab = "Theoretical Quantiles",
+       ylab = "Sample Quantiles")
 qqline(metadata_csv_clean_no_outliers$Diameter_of_tumor, col = "red")
 
 #Second way of visualization of the normality of the tumor diameter (QQplot)
 install.packages("ggpubr")
 library(ggpubr)
-ggqqplot(metadata_csv_clean_no_outliers$Diameter_of_tumor)
+ggqqplot(metadata_csv_clean_no_outliers$Diameter_of_tumor,metadata_csv_clean_no_outliers$Diameter_of_tumor, 
+         main = "Q-Q Plot: Tumor Diameter",
+         xlab = "Theoretical Quantiles",
+         ylab = "Sample Quantiles",
+         color = "blue") + theme_minimal()
 
 #Third way of visualizing the normality of the tumor diameter (histogram)
 bw <- 0.6
@@ -460,7 +467,7 @@ model4 <- lm(Diameter_of_tumor ~ AFPcontinuous + MVI, data = metadata_csv_clean_
 residuals <- residuals(model4)
 
 plot(residuals, 
-     main = "Residuals vs. Order of the data", 
+     main = "Residuals vs. Observation order", 
      xlab = "Observation Number", 
      ylab = "Residuals", 
      pch = 19, 
