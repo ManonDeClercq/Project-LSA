@@ -287,6 +287,7 @@ y = combined_data[target]
 
 # Convert target variable to binary classification (e.g., tumor size > 3 cm is 1, else 0)
 y_binary = (y > 3).astype(int)
+#This approach is straightforward and aligns with the goal of classifying tumors based on their size. 
 
 # Split data into training and testing sets
 X_train, X_test, y_train, y_test = train_test_split(X, y_binary, test_size=0.25, random_state=42)
