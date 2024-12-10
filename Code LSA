@@ -749,7 +749,7 @@ resultsnoncontrast %>%
   ggtitle("resultsnoncontrast")
 #these two look IDENTICAL, only work with contrast from now on
 ```
-Table for posthoc analysis
+
 Table for posthoc analysis
 ```{r}
 resultscontrast_table_posthoc <- resultscontrast %>%
