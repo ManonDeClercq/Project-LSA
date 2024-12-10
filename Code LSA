@@ -666,7 +666,7 @@ legend("topright",
        title = "Sample Types")
 
 ```
-From PCA: the tumor samples seem to be super spread out, indicating that each tumor has very different expression patterns?
+From MDS: the tumor samples seem to be super spread out, indicating that each tumor has very different expression patterns?
 
 
 
