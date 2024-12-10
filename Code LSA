@@ -139,7 +139,7 @@ list_filtering_metadata <- list()
 for (x in 1:nrow(abundances_metadata)) {
   NA_amount_row <- sum(is.na(abundances_patient_data[x,]))
   fractionrowNA <- NA_amount_row/199
-  if (fractionrowNA > 0.05) {
+  if (fractionrowNA > 0.25) {
     list_filtering_metadata[[x]] <- 1
   } else {
     list_filtering_metadata[[x]] <- 0
@@ -706,11 +706,94 @@ identical(resultscontrast, resultsnoncontrast)
 
 VOLCANOPLOT
 ```{r}
-volcanoplot(fitnoncontrast, coef=1, highlight = 100, names=rownames(fitnoncontrast))
-volcanoplot(fitcontrast, coef=1, highlight = 100, names=rownames(fitcontrast))
+volcanoplot(fitnoncontrast, coef=1, highlight = 100, names=fitnoncontrast$genes$ID)
+volcanoplot(fitcontrast, coef=1, highlight = 100, names=fitcontrast$genes$ID)
 
 #the volcanoplots are different
 ```
 
+
+Better looking volcanoplots
+```{r}
+#volcanoplot for the resultscontrast
+resultscontrast %>%
+  mutate(labelnames = case_when( (resultscontrast$logFC > 2 | resultscontrast$logFC < -2) & (resultscontrast$adj.P.Val <= 0.05) ~ ID,
+                                    TRUE ~ "")) %>%
+  mutate(colorsign = case_when( (resultscontrast$logFC > 2 | resultscontrast$logFC < -2) & (resultscontrast$adj.P.Val <= 0.05) ~ "Significant",
+                                    TRUE ~ "Insignificant")) %>%
+  ggplot(aes(x=logFC, y =-log10(adj.P.Val), label=labelnames, color = colorsign))+
+  geom_point(cex=0.2)+
+  geom_text(size=2)+
+  theme_classic() +
+  geom_hline(yintercept = 1.301, color = "lightgray")+
+  geom_vline(xintercept = 2, color="lightgray")+
+  geom_vline(xintercept = -2, color="lightgray")+
+  scale_color_manual(values=c("darkgreen","darkred"))+
+  ggtitle("resultscontrast")
+
+
+#volcanoplot for the resultsnoncontrast
+resultsnoncontrast %>%
+  mutate(labelnames = case_when( (resultsnoncontrast$logFC > 2 | resultsnoncontrast$logFC < -2) & (resultsnoncontrast$adj.P.Val <= 0.05) ~ ID,
+                                    TRUE ~ "")) %>%
+  mutate(colorsign = case_when( (resultsnoncontrast$logFC > 2 | resultsnoncontrast$logFC < -2) & (resultsnoncontrast$adj.P.Val <= 0.05) ~ "Significant",
+                                    TRUE ~ "Insignificant")) %>%
+  ggplot(aes(x=logFC, y =-log10(adj.P.Val), label=labelnames, color = colorsign))+
+  geom_point(cex=0.2)+
+  geom_text(size=2)+
+  theme_classic() +
+  geom_hline(yintercept = 1.301, color = "lightgray")+
+  geom_vline(xintercept = 2, color="lightgray")+
+  geom_vline(xintercept = -2, color="lightgray")+
+  scale_color_manual(values=c("darkgreen","darkred"))+
+  ggtitle("resultsnoncontrast")
+#these two look IDENTICAL, only work with contrast from now on
+```
+Table for posthoc analysis
+Table for posthoc analysis
+```{r}
+resultscontrast_table_posthoc <- resultscontrast %>%
+  mutate(Importance = case_when( (resultscontrast$logFC > 2 | resultscontrast$logFC < -2) & 
+                                  (resultscontrast$adj.P.Val <= 0.05) ~ "Important", TRUE ~ "Non-important")) %>%
+  filter(Importance == "Important")
+
+#List of important ID's for analysis
+resultscontrast_table_posthoc$ID
+length(resultscontrast_table_posthoc$ID) #86 singificant proteins
+
+#for the upregulated genes
+resultscontrast_table_posthoc_up <- resultscontrast %>%
+  mutate(Importance = case_when( (resultscontrast$logFC > 2 ) & 
+                                  (resultscontrast$adj.P.Val <= 0.05) ~ "Important", TRUE ~ "Non-important")) %>%
+  filter(Importance == "Important")
+
+#for the downregulated genes
+resultscontrast_table_posthoc_down <- resultscontrast %>%
+  mutate(Importance = case_when( (resultscontrast$logFC < -2) & 
+                                  (resultscontrast$adj.P.Val <= 0.05) ~ "Important", TRUE ~ "Non-important")) %>%
+  filter(Importance == "Important")
+
+
+#for printing a list that we can put into enrichR
+for (i in 1:nrow(resultscontrast_table_posthoc)) {
+  cat(resultscontrast_table_posthoc$ID[i], sep = "\n" )
+}
+
+#for upregulated
+for (i in 1:nrow(resultscontrast_table_posthoc_up)) {
+  cat(resultscontrast_table_posthoc_up$ID[i], sep = "\n" )
+}
+
+
+for (i in 1:nrow(resultscontrast_table_posthoc_down)) {
+  cat(resultscontrast_table_posthoc_down$ID[i], sep = "\n" )
+}
+#took these proteins into https://www.uniprot.org/id-mapping
+#converted to Gene name
+#downloaded as uncompressed excel file
+#copy-pasted the resulting the gene names from this excel file
+
+
+```
 
 
