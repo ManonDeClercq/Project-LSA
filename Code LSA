@@ -759,7 +759,6 @@ resultscontrast_table_posthoc <- resultscontrast %>%
 
 #List of important ID's for analysis
 resultscontrast_table_posthoc$ID
-length(resultscontrast_table_posthoc$ID) #86 singificant proteins
 
 #for the upregulated genes
 resultscontrast_table_posthoc_up <- resultscontrast %>%
@@ -788,6 +787,10 @@ for (i in 1:nrow(resultscontrast_table_posthoc_up)) {
 for (i in 1:nrow(resultscontrast_table_posthoc_down)) {
   cat(resultscontrast_table_posthoc_down$ID[i], sep = "\n" )
 }
+length(resultscontrast_table_posthoc$ID) #86 singificant proteins total
+length(resultscontrast_table_posthoc_up$ID) #36 singificant proteins upregulated
+length(resultscontrast_table_posthoc_down$ID) #50 singificant proteins downregulated
+
 #took these proteins into https://www.uniprot.org/id-mapping
 #converted to Gene name
 #downloaded as uncompressed excel file
