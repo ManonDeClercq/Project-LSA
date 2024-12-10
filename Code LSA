@@ -187,7 +187,12 @@ abundances_tsv_imputed <- bind_cols(abundances_metadata, imputed_patient_data)
 abundances_tsv_imputed_filtered <- abundances_tsv_imputed[vector_filtering_metadata == 0, ]
 vis_miss(abundances_tsv_imputed_filtered)
 
-vis_miss(abundances_tsv_imputed)
+#checking for remaining NA's => all in symbol; no missing values, just missing symbols
+rows_with_na <- apply(abundances_tsv_imputed_filtered, 1, function(x) any(is.na(x)))
+abundances_tsv_imputed_filtered[rows_with_na, ]
+which(is.na(abundances_tsv_imputed_filtered$Symbol))
+
+
 ```
 
 Standardization of data 
