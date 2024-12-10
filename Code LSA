@@ -202,11 +202,8 @@ standardize <- function(x) {
 }
 
 #Copy original dataset
-abundances_tsv_imputed_stand <- abundances_tsv_imputed_filtered
 metadata_csv_clean_stand <- metadata_csv_clean
 
-#Identify numerical columns
-numeric_cols_abundances<- sapply(abundances_tsv_imputed_stand, is.numeric)
   # Diameter_of_tumor as numeric
 metadata_csv_clean_stand$Diameter_of_tumor <- as.numeric(metadata_csv_clean_stand$Diameter_of_tumor) 
   # Delete rows with NA in Diameter_of_tumor
@@ -214,12 +211,10 @@ metadata_csv_clean_stand <- metadata_csv_clean_stand[!is.na(metadata_csv_clean_s
 numeric_cols_metadata <- sapply(metadata_csv_clean_stand, is.numeric)
 
 #Apply standardization function on numerical data
-abundances_tsv_imputed_stand[, numeric_cols_abundances] <- lapply(abundances_tsv_imputed_filtered[, numeric_cols_abundances], standardize)
 metadata_csv_clean_stand[, numeric_cols_metadata] <- lapply(metadata_csv_clean_stand[, numeric_cols_metadata], standardize)
 
 
 #Check first rows dataset
-head(abundances_tsv_imputed_stand)
 head(metadata_csv_clean_stand)
 ```
 
