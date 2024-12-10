@@ -784,7 +784,7 @@ for (i in 1:nrow(resultscontrast_table_posthoc_up)) {
   cat(resultscontrast_table_posthoc_up$ID[i], sep = "\n" )
 }
 
-
+#for downregulated
 for (i in 1:nrow(resultscontrast_table_posthoc_down)) {
   cat(resultscontrast_table_posthoc_down$ID[i], sep = "\n" )
 }
