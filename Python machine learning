@@ -218,15 +218,15 @@ plt.show()
 #Logistic regression model that gives probability scores + precision, recall and accuracy + ROC curve and AUC + predicted values of tumor diameter
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LogisticRegression, LinearRegression
+from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import accuracy_score, precision_score, recall_score, roc_curve, auc, mean_squared_error
+from sklearn.metrics import accuracy_score, precision_score, recall_score, roc_curve, auc
 import numpy as np
 import matplotlib.pyplot as plt
 
 # File paths
 metadata_file_path = r'/kaggle/input/metadata/metadata.csv'
-abundances_file_path = r'/kaggle/input/abundances/abundances.xlsx'
+abundances_file_path = r'/kaggle/input/abundanties/abundances.xlsx'
 
 # Read data
 metadata = pd.read_csv(metadata_file_path)
@@ -252,25 +252,7 @@ label_encoder = LabelEncoder()
 X.loc[:, 'Protein.names'] = label_encoder.fit_transform(combined_data['Protein.names'])
 
 # Rename columns for better visualization in the feature importance graph
-X.rename(c
-
-# Fill missing values with 0
-combined_data.fillna(0, inplace=True)
-
-# Remove LxxxP data
-patient_columns = [col for col in abundances.columns if col.endswith('P') and col.startswith('L')]
-abundances_dropped = abundances.drop(columns=patient_columns)
-
-# Define target variable and features
-target = 'Diameter_of_tumor_(cm)'
-y = combined_data[target]  # Target variable
-X = combined_data[['AFP_(ng/ml)', 'MVI', 'age', 'Tumor_number']]  # Features
-
-# Apply Label Encoding to 'Protein.names' column
-label_encoder = LabelEncoder()
-X.loc[:, 'Protein.names'] = label_encoder.fit_transform(combined_data['Protein.names'])
-
-# Rolumns={
+X.rename(columns={
     'AFP_(ng/ml)': 'AFP',
     'MVI': 'MVI',
     'age': 'Age',
@@ -308,15 +290,15 @@ y_binary = (y > 3).astype(int)
 # Split data into training and testing sets
 X_train, X_test, y_train, y_test = train_test_split(X, y_binary, test_size=0.25, random_state=42)
 
-# Logistic Regression for binary classification
+# Initialize and train LogisticRegression model
 logistic_model = LogisticRegression(random_state=42)
 logistic_model.fit(X_train, y_train)
 
-# Predict probabilities and classifications
+# Make predictions with LogisticRegression
 y_pred_proba = logistic_model.predict_proba(X_test)[:, 1]  # Probability scores for the positive class
-y_pred_logistic = (y_pred_proba >= 0.5).astype(int)
 
-# Evaluate Logistic Regression
+# Calculate accuracy, precision, and recall using a threshold of 0.5
+y_pred_logistic = (y_pred_proba >= 0.5).astype(int)
 accuracy = accuracy_score(y_test, y_pred_logistic)
 precision = precision_score(y_test, y_pred_logistic)
 recall = recall_score(y_test, y_pred_logistic)
@@ -330,6 +312,7 @@ print(f"Recall: {recall:.2f}")
 # Plot ROC curve
 fpr, tpr, _ = roc_curve(y_test, y_pred_proba)
 roc_auc = auc(fpr, tpr)
+
 plt.figure()
 plt.plot(fpr, tpr, color='darkorange', lw=2, label=f'ROC curve (area = {roc_auc:.2f})')
 plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
