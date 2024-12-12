@@ -1,123 +1,8 @@
-# Import library
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_squared_error, r2_score
-import numpy as np
-
-# Save filepath to variable for easier access
-metadata_file_path = r'/kaggle/input/metadata/metadata.csv'
-abundances_file_path = r'/kaggle/input/abundances/abundances.xlsx'
-
-# Read the data and store data in a DataFrame
-metadata = pd.read_csv(metadata_file_path)
-abundances = pd.read_excel(abundances_file_path)
-
-# Print a summary of the data
-print(metadata.describe())
-print(abundances.describe())
-
-
-#combine datasets
-
-# Combine datasets based on index
-combined_data = pd.concat([metadata, abundances.reset_index()], axis=1)
-
-# Inspect combined dataset
-print(combined_data.head())
-
-#0 for missing values
-combined_data.fillna(0, inplace=True)
-
-# Define target variable and features
-target = 'Diameter_of_tumor_(cm)'
-y = combined_data[target]  # Target variable
-X = combined_data[['AFP_(ng/ml)', 'Macrovascular_invasion']]  # Features
-
-
-#split data in training and testing sets
-from sklearn.model_selection import train_test_split
-
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-#Make data like '1.2+1.5' as mean:
-def parse_to_float(value):
-    try:
-        # Check if '+' is in the string and calculate the mean of the numbers
-        if '+' in str(value):
-            numbers = [float(v) for v in value.split('+')]
-            return sum(numbers) / len(numbers)
-        else:
-            return float(value)  # Convert directly to float if no '+'
-    except ValueError:
-        return np.nan  # Return NaN for invalid values
-
-# Apply parsing 
-y_train = y_train.apply(parse_to_float)
-y_test = y_test.apply(parse_to_float)
-y = y.apply(parse_to_float)
-X = X.apply(parse_to_float)
-
-
-#0 for missing values
-X_train.fillna(0, inplace=True)
-X_test.fillna(0, inplace=True)
-
-#DescisionTreeRegressor model #model1
-from sklearn.tree import DecisionTreeRegressor
-
-# Define model. Specify a number for random_state to ensure same results each run
-melbourne_model = DecisionTreeRegressor(random_state=1)
-
-# Fit model
-melbourne_model.fit(X, y)
-
-
-print(X.head())
-print("The predictions are")
-print(melbourne_model.predict(X.head()))
-
-
-#RandomForestRegressor model #model2
-# Train een Random Forest Regressor model
-model = RandomForestRegressor(random_state=42)
-model.fit(X_train, y_train)
-
-# Predictions 
-y_pred = model.predict(X_test)
-
-# Evaluate model
-mse = mean_squared_error(y_test, y_pred)
-r2 = r2_score(y_test, y_pred)
-
-print(f"Mean Squared Error: {mse:.2f}")
-print(f"R² Score: {r2:.2f}")
-
-# Visualise important features
-import matplotlib.pyplot as plt
-
-feature_importances = pd.Series(model.feature_importances_, index=X.columns)
-feature_importances.nlargest(2).plot(kind="barh")
-plt.title("Feature Importances")
-plt.show()
-
-
-
-
-
-
-
-
-
-#updated code
-#Only on tumor data from abundances
-# Import libraries
-import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_squared_error, r2_score
-from sklearn.tree import DecisionTreeRegressor
+from sklearn.linear_model import LogisticRegression, LinearRegression
 from sklearn.preprocessing import LabelEncoder
+from sklearn.metrics import accuracy_score, precision_score, recall_score, roc_curve, auc, mean_squared_error
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -135,7 +20,7 @@ combined_data = pd.concat([metadata, abundances.reset_index()], axis=1)
 # Fill missing values with 0
 combined_data.fillna(0, inplace=True)
 
-#Remove LxxxP data
+# Remove LxxxP data
 patient_columns = [col for col in abundances.columns if col.endswith('P') and col.startswith('L')]
 abundances_dropped = abundances.drop(columns=patient_columns)
 
@@ -159,117 +44,13 @@ X.rename(columns={
 # Function to handle '+' in string and convert to float
 def parse_to_float(value):
     try:
-        # Check if '+' is in the string and calculate the mean of the numbers
         if '+' in str(value):
             numbers = [float(v) for v in value.split('+')]
             return sum(numbers) / len(numbers)
         else:
-            return float(value)  # Convert directly to float if no '+'
+            return float(value)
     except ValueError:
-        return np.nan  # Return NaN for invalid values
-
-# Apply parse_to_float function to the entire dataframe
-X = X.applymap(parse_to_float)
-y = y.apply(parse_to_float)
-
-# Drop rows with NaN values
-combined_data = pd.concat([X, y], axis=1)
-combined_data.dropna(inplace=True)
-
-# Re-separate X and y after dropping rows with NaN values
-X = combined_data.drop(columns=[target])
-y = combined_data[target]
-
-# Split data into training and testing sets
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-
-# Initialize and train DecisionTreeRegressor model (model 1)
-melbourne_model = DecisionTreeRegressor(random_state=1)
-melbourne_model.fit(X_train, y_train)
-
-# Make predictions with DecisionTreeRegressor
-y_pred_tree = melbourne_model.predict(X_test)
-
-# Print predictions and evaluate the model
-print("Decision Tree Predictions:", y_pred_tree)
-
-# Initialize and train RandomForestRegressor model (model 2)
-random_forest_model = RandomForestRegressor(random_state=42)
-random_forest_model.fit(X_train, y_train)
-
-# Make predictions with RandomForestRegressor
-y_pred_forest = random_forest_model.predict(X_test)
-
-# Evaluate RandomForestRegressor model
-mse = mean_squared_error(y_test, y_pred_forest)
-r2 = r2_score(y_test, y_pred_forest)
-print(f"Random Forest - Mean Squared Error: {mse:.2f}")
-print(f"Random Forest - R² Score: {r2:.2f}")
-
-# Visualize feature importances from RandomForestRegressor
-feature_importances = pd.Series(random_forest_model.feature_importances_, index=X.columns)
-feature_importances.plot(kind="barh", color='skyblue')
-plt.title("Feature Importances")
-plt.xlabel("Importance")
-plt.ylabel("Features")
-plt.show()
-
-
-#Logistic regression model that gives probability scores + precision, recall and accuracy + ROC curve and AUC + predicted values of tumor diameter
-import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.linear_model import LogisticRegression
-from sklearn.preprocessing import LabelEncoder
-from sklearn.metrics import accuracy_score, precision_score, recall_score, roc_curve, auc
-import numpy as np
-import matplotlib.pyplot as plt
-
-# File paths
-metadata_file_path = r'/kaggle/input/metadata/metadata.csv'
-abundances_file_path = r'/kaggle/input/abundanties/abundances.xlsx'
-
-# Read data
-metadata = pd.read_csv(metadata_file_path)
-abundances = pd.read_excel(abundances_file_path)
-
-# Combine datasets
-combined_data = pd.concat([metadata, abundances.reset_index()], axis=1)
-
-# Fill missing values with 0
-combined_data.fillna(0, inplace=True)
-
-# Remove LxxxP data
-patient_columns = [col for col in abundances.columns if col.endswith('P') and col.startswith('L')]
-abundances_dropped = abundances.drop(columns=patient_columns)
-
-# Define target variable and features
-target = 'Diameter_of_tumor_(cm)'
-y = combined_data[target]  # Target variable
-X = combined_data[['AFP_(ng/ml)', 'MVI', 'age', 'Tumor_number']]  # Features
-
-# Apply Label Encoding to 'Protein.names' column
-label_encoder = LabelEncoder()
-X.loc[:, 'Protein.names'] = label_encoder.fit_transform(combined_data['Protein.names'])
-
-# Rename columns for better visualization in the feature importance graph
-X.rename(columns={
-    'AFP_(ng/ml)': 'AFP',
-    'MVI': 'MVI',
-    'age': 'Age',
-    'Tumor_number': 'Tumor Number'
-}, inplace=True)
-
-# Function to handle '+' in string and convert to float
-def parse_to_float(value):
-    try:
-        # Check if '+' is in the string and calculate the mean of the numbers
-        if '+' in str(value):
-            numbers = [float(v) for v in value.split('+')]
-            return sum(numbers) / len(numbers)
-        else:
-            return float(value)  # Convert directly to float if no '+'
-    except ValueError:
-        return np.nan  # Return NaN for invalid values
+        return np.nan
 
 # Apply parse_to_float function to the entire dataframe
 X = X.applymap(parse_to_float)
@@ -285,25 +66,23 @@ y = combined_data[target]
 
 # Convert target variable to binary classification (e.g., tumor size > 3 cm is 1, else 0)
 y_binary = (y > 3).astype(int)
-#This approach is straightforward and aligns with the goal of classifying tumors based on their size. 
 
 # Split data into training and testing sets
 X_train, X_test, y_train, y_test = train_test_split(X, y_binary, test_size=0.25, random_state=42)
 
-# Initialize and train LogisticRegression model
+# Logistic Regression for binary classification
 logistic_model = LogisticRegression(random_state=42)
 logistic_model.fit(X_train, y_train)
 
-# Make predictions with LogisticRegression
-y_pred_proba = logistic_model.predict_proba(X_test)[:, 1]  # Probability scores for the positive class
-
-# Calculate accuracy, precision, and recall using a threshold of 0.5
+# Predict probabilities and classifications
+y_pred_proba = logistic_model.predict_proba(X_test)[:, 1]
 y_pred_logistic = (y_pred_proba >= 0.5).astype(int)
+
+# Evaluate Logistic Regression
 accuracy = accuracy_score(y_test, y_pred_logistic)
 precision = precision_score(y_test, y_pred_logistic)
 recall = recall_score(y_test, y_pred_logistic)
 
-# Print probability scores and evaluation metrics
 print("Logistic Regression Probability Scores:", y_pred_proba)
 print(f"Accuracy: {accuracy:.2f}")
 print(f"Precision: {precision:.2f}")
@@ -323,11 +102,9 @@ plt.ylabel('True Positive Rate')
 plt.title('Receiver Operating Characteristic (ROC) Curve')
 plt.legend(loc="lower right")
 plt.show()
-#The more that the ROC curve hugs the top left corner of the plot, the better the model does at classifying the data into categories. Here, the area under the curve (=AUC) is 0,99 and the closer the AUC is to one the better the model.
-#The ROC curve is made to detect whether the threshold of 0.5 in the code above, for the logistic model, is good.
 
 # Linear Regression for tumor diameter prediction
-y_continuous = combined_data[target]  # Use continuous target variable for regression
+y_continuous = combined_data[target]
 X_train_reg, X_test_reg, y_train_reg, y_test_reg = train_test_split(X, y_continuous, test_size=0.25, random_state=42)
 
 # Train Linear Regression model
@@ -337,10 +114,13 @@ regression_model.fit(X_train_reg, y_train_reg)
 # Predict tumor diameter
 y_pred_diameter = regression_model.predict(X_test_reg)
 
-# Print predicted tumor diameters
 print("Linear Regression Predictions for Tumor Diameter:")
 print(y_pred_diameter)
 
 # Evaluate Linear Regression with Mean Squared Error
 mse = mean_squared_error(y_test_reg, y_pred_diameter)
 print(f"Mean Squared Error (Tumor Diameter Prediction): {mse:.2f}")
+
+# Evaluate Linear Regression with R2 Score
+r2_score = regression_model.score(X_test_reg, y_test_reg)
+print(f"R2 Score (Tumor Diameter Prediction): {r2_score:.2f}")
