@@ -640,6 +640,20 @@ abundances_dge_norm <- calcNormFactors(abundances_dge, method = "TMM")
 
 ```
 
+Plot normalized data
+```{r}
+abundances_dge_norm$samples
+head(abundances_dge_norm$counts) #example protein is O43708
+
+#plotting for normalized
+cpm_matrix <- cpm(abundances_dge_norm)
+plot(abundances_dge_norm$counts["O43708",], cpm_matrix["O43708",],
+     xlab = "normalized counts O43708",
+     ylab = "counts per million O43708",
+     main = "Example plot normalization for O43708")
+
+```
+
 Log transform
 ```{r}
 log_voom_matrix_paired <- voom(abundances_dge_norm, plot = TRUE)
@@ -661,7 +675,10 @@ log_voom_df_expr <- as.data.frame(log_voom_matrix_paired$E) %>%
 Dimensionality reduction quality control (MDS or PCA)
 ```{r}
 color_type <- as.numeric(as.factor(abundances_sample_type_table$Condition))
-plotMDS(log_voom_matrix_paired, labels = NULL, pch=20, col=color_type)
+plotMDS(log_voom_matrix_paired, labels = NULL, pch=20, col=color_type,
+        xlab = "Leading logFC dimension 1",
+        ylab = "Leading logFC dimension 2",
+        main = "MDS-plot for protein expression of samples")
 
 
 legend("topright", 
@@ -746,7 +763,7 @@ resultsnoncontrast %>%
   geom_vline(xintercept = 2, color="lightgray")+
   geom_vline(xintercept = -2, color="lightgray")+
   scale_color_manual(values=c("darkgreen","darkred"))+
-  ggtitle("resultsnoncontrast")
+  ggtitle("Volcano plot differentially expressed proteins")
 #these two look IDENTICAL, only work with contrast from now on
 ```
 
