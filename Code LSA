@@ -35,33 +35,33 @@ class(metadata_csv_raw) #spec_tbl_df / tbl_df / tbl / data.frame
 ```
 
 
-Exploring data + checking for missing data
+Exploring data + checking missing data
 ```{r}
-summary(metadata_csv_raw) #min and max 0 means 1 value: HCV, HBV, lymphatic_metastasis, macrovascular_invasion, profiling_data_QC_status, BCLC
-summary(abundances_tsv_raw)
-str(metadata_csv_raw)
-str(abundances_tsv_raw)
+summary(metadata_csv_raw) #min en max 0 (or just same value) = useless dingen: HCV, HBV lymphatic_metastasis, macrovascular_invasion, profiling data QC status(kunnen deze parameters weghalen, nutteloze kolommen, vertragen onze code)
+summary(abundances_tsv_raw) #hier halen we niks uit, te veel informatie
+str(metadata_csv_raw) #hieruit checken we kinda wat te converteren naar factors
+str(abundances_tsv_raw) #as expected, protein amounts are numbers
 
 
-#Check for missing values 
+#check for missing values 
 library(visdat) 
-vis_miss(metadata_csv_raw) #missing values in Tumor_cellularity_(%) (0.5% missing) 
-vis_miss(abundances_tsv_raw) #missing values (22.9% missing)
+vis_miss(metadata_csv_raw) #missing values in Tumor_cellularity_(%) (0.5% missing) + alle missing values zitten in tumor cellularit
+vis_miss(abundances_tsv_raw) #overal missing values (behalve Protein.names) (22.9% missing)
 
-gg_miss_var(metadata_csv_raw)  
-gg_miss_var(abundances_tsv_raw)
+gg_miss_var(metadata_csv_raw) #overzichtelijkere versie van de vis_miss 
+gg_miss_var(abundances_tsv_raw) #overzichtelijkere vere van de vis_miss 
 
 
-#Count missing values in metadata
+#checken voor metadata hoeveel waarden wegvallen.
 na_count <- sum(is.na(metadata_csv_raw$`Tumor_cellularity_(%)`))
-na_count #there are 10 missing values out of 101 values
+na_count #there are 10 missing values out of 101, if we remove these we still have 91 values, we kunnen hier waarden gewoon weghalen.
 
-#Check which ID's are associated with these NA's
+#check which ID's are associated with these NA's
 na_indices <- which(is.na(metadata_csv_raw$`Tumor_cellularity_(%)`))
 na_ids <- metadata_csv_raw$ID[na_indices]
 na_ids
 
-#Effective removal of missing continued later during cleaning
+#effective removal of missing continued later during cleaning
 ```
 
 
@@ -82,17 +82,26 @@ metadata_csv_clean <- metadata_csv_raw %>% select(-HCV, -Lymphatic_metastasis, -
 #change Tumor_cellularity_(%) to Tumor_cellularity because brackets could give problems with the code
 colnames(metadata_csv_clean)[colnames(metadata_csv_clean) == "Tumor_cellularity_(%)"] <- "Tumor_cellularity"
 
+#Removal of missing data from metadata
+#MCAR: little's MCAR test 
+mcar_test_result <- naniar::mcar_test(metadata_csv_clean) 
+print(mcar_test_result) #result suggest MCAR (p-value 0.08366846)  
+#deletion because the missing data is MCAR and not a lot of missing values 
+
 #removal of all rows with 2 tumors, because this gives a problem in the column of the diameter of the tumors, where these diameters are shown with a + in between. Since only 7 patients have 2 tumors of the 101 patients in this dataset, these can be removed.
-metadata_csv_clean_stand <- metadata_csv_clean_stand[metadata_csv_clean_stand$Tumor_number == 1, ] 
+metadata_csv_clean <- metadata_csv_clean[metadata_csv_clean$Tumor_number == 1, ] 
+
+#Removing NA values (missing values)
+metadata_csv_clean <- metadata_csv_clean[!is.na(metadata_csv_clean$Tumor_cellularity), ]
 
 #change AFP_(ng/ml) to AFPcontinuous because brackets could give problems with the code
-colnames(metadata_csv_clean_stand)[colnames(metadata_csv_clean_stand) == "AFP_(ng/ml)"] <- "AFPcontinuous"
+colnames(metadata_csv_clean)[colnames(metadata_csv_clean) == "AFP_(ng/ml)"] <- "AFPcontinuous"
 
 #change Disease_free_survival_(m) to Disease_free_survival because brackets could give problems with the code
-colnames(metadata_csv_clean_stand)[colnames(metadata_csv_clean_stand) == "Disease_free_survival_(m)"] <- "Disease_free_survival" 
+colnames(metadata_csv_clean)[colnames(metadata_csv_clean) == "Disease_free_survival_(m)"] <- "Disease_free_survival" 
 
 #change Total_follow_up_period(m) to Total_follow_up_period because brackets could give problems with the code
-colnames(metadata_csv_clean_stand)[colnames(metadata_csv_clean_stand) == "Total_follow_up_period_(m)"] <- "Total_follow_up_period" 
+colnames(metadata_csv_clean)[colnames(metadata_csv_clean) == "Total_follow_up_period_(m)"] <- "Total_follow_up_period" 
 
 #Change gender and other 0-1's to factor: HBV, liver cirrhosis, MVI, AFP, recurr_status, survival_status, BCLC_stage
 metadata_csv_clean$Gender <- as.factor(metadata_csv_clean$Gender) 
@@ -105,19 +114,6 @@ metadata_csv_clean$Survival_status <- as.factor(metadata_csv_clean$Survival_stat
 str(metadata_csv_clean) 
 
 abundances_tsv_clean <- abundances_tsv_raw 
-```
-
-
-Removal of missing data from metadata
-```{r}
-#MCAR: little's MCAR test 
-mcar_test_result <- naniar::mcar_test(metadata_csv_clean) 
-print(mcar_test_result) #result suggest MCAR (p-value 0.08366846)  
-#deletion because the missing data is MCAR and not a lot of missing values 
-
-
-#Removing NA values (missing values)
-metadata_csv_clean <- metadata_csv_clean[!is.na(metadata_csv_clean$Tumor_cellularity), ]
 ```
 
 
@@ -163,7 +159,7 @@ abundances_tumor_samples <- abundances_patient_data %>% select(contains("T"))
 
 #Function to impute missing values using null imputation
 impute_missing <- function(data) {
-  data %>% mutate_all(~ ifelse(is.na(.), 0, .))
+  data %>% mutate_all(~ na_mean(.))
 }
 
 #Apply the imputation to healthy and tumor datasets
@@ -215,7 +211,20 @@ metadata_csv_clean_stand <- metadata_csv_clean_stand[!is.na(metadata_csv_clean_s
 numeric_cols_metadata <- sapply(metadata_csv_clean_stand, is.numeric)
 
 #Apply standardization function on numerical data
-metadata_csv_clean_stand[, numeric_cols_metadata] <- lapply(metadata_csv_clean_stand[, numeric_cols_metadata], standardize)
+# Functie om data te standaardiseren, met controle op missende waarden en sd == 0
+standardize <- function(x) {
+  if (all(is.na(x)) || sd(x, na.rm = TRUE) == 0) {
+    return(x) # Geen standaardisatie als alle waarden NA zijn of sd == 0
+  } else {
+    return((x - mean(x, na.rm = TRUE)) / sd(x, na.rm = TRUE))
+  }
+}
+
+# Pas de standaardisatie toe op de geselecteerde numerieke kolommen
+metadata_csv_clean_stand[, numeric_cols_metadata] <- lapply(
+  metadata_csv_clean_stand[, numeric_cols_metadata],
+  standardize
+)
 
 
 #Check first rows dataset
@@ -253,6 +262,7 @@ metadata_csv_clean_stand %>%
 
 
 #AFP (ng/ml) in density plot 
+colnames(metadata_csv_clean_stand)[colnames(metadata_csv_clean_stand) == "AFP_(ng/ml)"] <- "AFPcontinuous"
 metadata_csv_clean_stand %>% 
   ggplot(aes(x=AFPcontinuous))+ 
   geom_density(color="darkblue", fill= "darkblue", alpha=0.5)+ 
@@ -264,7 +274,8 @@ metadata_csv_clean_stand %>%
   theme_classic() 
 #There are 10 outliers detected, but this data will not be removed, because this column has a very big range of values. These outliers might therefore be important in the dataset.
 
-#Disease free survival in density plot 
+#Disease free survival in density plot
+colnames(metadata_csv_clean_stand)[colnames(metadata_csv_clean_stand) == "Disease_free_survival_(m)"] <- "Disease_free_survival" 
 metadata_csv_clean_stand %>% 
   ggplot(aes(x=Disease_free_survival))+ 
   geom_density(color="darkblue", fill = "darkblue", alpha=0.5)+ 
@@ -278,7 +289,8 @@ metadata_csv_clean_stand %>%
   theme_classic() 
 #There are no outliers detected 
 
-#Total follow-up period in density plot 
+#Total follow-up period in density plot
+colnames(metadata_csv_clean_stand)[colnames(metadata_csv_clean_stand) == "Total_follow_up_period_(m)"] <- "Total_follow_up_period"
 metadata_csv_clean_stand %>% 
   ggplot(aes(x=Total_follow_up_period))+ 
   geom_density(color="darkblue", fill="darkblue", alpha=0.5)+ 
@@ -345,8 +357,9 @@ metadata_csv_clean_stand_no_outliers %>%
 Hypothesis 1
 Making a correlation matrix to see which parameters are correlated with each other
 ```{r}
-numeric_vars <- sapply(metadata_csv_clean_no_outliers, is.numeric) # Identify numeric variables
-correlation_matrix <- cor(metadata_csv_clean_no_outliers[numeric_vars], use="pairwise.complete.obs")
+metadata_csv_clean_stand_no_outliers$MVI <- as.numeric(metadata_csv_clean_stand_no_outliers$MVI)
+numeric_vars <- sapply(metadata_csv_clean_stand_no_outliers, is.numeric) # Identify numeric variables
+correlation_matrix <- cor(metadata_csv_clean_stand_no_outliers[numeric_vars], use="pairwise.complete.obs")
 install.packages("ggcorrplot")
 library(ggcorrplot)
 ggcorrplot(correlation_matrix, lab = TRUE, title = "Correlation Matrix", outline.col = "white")
@@ -359,7 +372,7 @@ H1: There is a correlation between MVI and AFPcontinuous on the diameter of the 
 Checking whether a linear regression model can be used for the first hypothesis.
 ```{r}
 #1: Linear correlation = lineair correlation
-ggplot(metadata_csv_clean_no_outliers, aes(x = Diameter_of_tumor, y = AFPcontinuous, color = factor(MVI))) + 
+ggplot(metadata_csv_clean_stand_no_outliers, aes(x = Diameter_of_tumor, y = AFPcontinuous, color = factor(MVI))) + 
   geom_point(size = 3) +              
   labs(title = "Tumor diameter vs AFPcontinuous",                
        x = "Tumor diameter (cm)",                      
@@ -367,7 +380,7 @@ ggplot(metadata_csv_clean_no_outliers, aes(x = Diameter_of_tumor, y = AFPcontinu
   scale_color_manual(values = c("orange","green"), labels = c("No MVI", "MVI"))
 
 #Linear correlation with log for AFPcontinuous
-ggplot(metadata_csv_clean_no_outliers, aes(x = Diameter_of_tumor, y = log(AFPcontinuous), color = factor(MVI))) + 
+ggplot(metadata_csv_clean_stand_no_outliers, aes(x = Diameter_of_tumor, y = log(AFPcontinuous), color = factor(MVI))) + 
   geom_point(size = 3) +              
   labs(title = "Tumor diameter vs log(AFPcontinuous)",                
        x = "Tumor diameter (cm)",                      
@@ -375,7 +388,7 @@ ggplot(metadata_csv_clean_no_outliers, aes(x = Diameter_of_tumor, y = log(AFPcon
   scale_color_manual(values = c("orange","green"), labels = c("No MVI", "MVI"))
 
 #Linear correlation with log for tumor diameter
-ggplot(metadata_csv_clean_no_outliers, aes(x = log(Diameter_of_tumor), y = AFPcontinuous, color = factor(MVI))) + 
+ggplot(metadata_csv_clean_stand_no_outliers, aes(x = log(Diameter_of_tumor), y = AFPcontinuous, color = factor(MVI))) + 
   geom_point(size = 3) +              
   labs(title = "log(Tumor diameter) vs AFPcontinuous",                
        x = "log(Tumor diameter (cm))",                      
@@ -383,7 +396,7 @@ ggplot(metadata_csv_clean_no_outliers, aes(x = log(Diameter_of_tumor), y = AFPco
   scale_color_manual(values = c("orange","green"), labels = c("No MVI", "MVI"))
 
 #Linear correlation with log for AFPcontinuous and the tumor diameter
-ggplot(metadata_csv_clean_no_outliers, aes(x = log(Diameter_of_tumor), y = log(AFPcontinuous), color = factor(MVI))) + 
+ggplot(metadata_csv_clean_stand_no_outliers, aes(x = log(Diameter_of_tumor), y = log(AFPcontinuous), color = factor(MVI))) + 
   geom_point(size = 3) +              
   labs(title = "log(Tumor diameter) vs log(AFPcontinuous)",                
        x = "log(Tumor diameter (cm))",                      
@@ -394,7 +407,7 @@ ggplot(metadata_csv_clean_no_outliers, aes(x = log(Diameter_of_tumor), y = log(A
 #The plot generated for linearity has a funnel shape, so this indicates heteroscedasticity. This is not illogical since the dispersion of AFPcontinuous will be larger with a larger diameter and the dispersion of AFPcontinuous will be smaller with a smaller diameter. 
 
 #Based on linearity and heteroscedasticity, a linear regression model cannot be plotted so we will switch to a glm model.
-model <- lm(Diameter_of_tumor ~ AFPcontinuous + MVI, data = metadata_csv_clean_no_outliers)
+model <- lm(Diameter_of_tumor ~ AFPcontinuous + MVI, data = metadata_csv_clean_stand_no_outliers)
 predictions <- predict(model)
 residuals <- residuals(model)
 
@@ -417,16 +430,17 @@ bptest(model)
 
 #3: Normality of residuals
 #Normality of only the tumor diameter (QQplot)
-qqnorm(metadata_csv_clean_no_outliers$Diameter_of_tumor, 
+qqnorm(metadata_csv_clean_stand_no_outliers$Diameter_of_tumor, 
        main = "Q-Q Plot: Tumor Diameter",
        xlab = "Theoretical Quantiles",
        ylab = "Sample Quantiles")
-qqline(metadata_csv_clean_no_outliers$Diameter_of_tumor, col = "red")
+qqline(metadata_csv_clean_stand_no_outliers$Diameter_of_tumor, col = "red")
 
 #Second way of visualization of the normality of the tumor diameter (QQplot)
+
 install.packages("ggpubr")
 library(ggpubr)
-ggqqplot(metadata_csv_clean_no_outliers$Diameter_of_tumor,metadata_csv_clean_no_outliers$Diameter_of_tumor, 
+ggqqplot(metadata_csv_clean_stand_no_outliers$Diameter_of_tumor,
          main = "Q-Q Plot: Tumor Diameter",
          xlab = "Theoretical Quantiles",
          ylab = "Sample Quantiles",
@@ -434,35 +448,35 @@ ggqqplot(metadata_csv_clean_no_outliers$Diameter_of_tumor,metadata_csv_clean_no_
 
 #Third way of visualizing the normality of the tumor diameter (histogram)
 bw <- 0.6
-ggplot(metadata_csv_clean_no_outliers, aes(x = Diameter_of_tumor))+
+ggplot(metadata_csv_clean_stand_no_outliers, aes(x = Diameter_of_tumor))+
   geom_histogram(binwidth = bw, fill = "lightgrey")+
-  stat_function(fun = function(x){dnorm(x, mean = mean(metadata_csv_clean_no_outliers$Diameter_of_tumor),
-                                        sd = sd(metadata_csv_clean_no_outliers$Diameter_of_tumor))* bw * length(metadata_csv_clean_no_outliers$Diameter_of_tumor)}, color = "yellow", size = 1)+
+  stat_function(fun = function(x){dnorm(x, mean = mean(metadata_csv_clean_stand_no_outliers$Diameter_of_tumor),
+                                        sd = sd(metadata_csv_clean_stand_no_outliers$Diameter_of_tumor))* bw * length(metadata_csv_clean_stand_no_outliers$Diameter_of_tumor)}, color = "yellow", size = 1)+
   theme_classic()+
   ggtitle("Diameter of tumor")+
   ylab("Abundance")
 #Even if the "bw" is changed to different values, the data is never normally distributed. 
 
 #Performing an extra test, the Shapiro-Wilk normality test, to check whether or not the tumor diameter is normally distributed.
-shapiro.test(metadata_csv_clean_no_outliers$Diameter_of_tumor)
+shapiro.test(metadata_csv_clean_stand_no_outliers$Diameter_of_tumor)
 #The p-value > 0,05, so the null hypothesis cannot be rejected, this mean that the tumor diameter is normally distributed.
 
 #Normality of the whole model, so with parameters tumor diameter, MVI and AFP
-model2 <- lm(Diameter_of_tumor ~ AFPcontinuous + MVI, data = metadata_csv_clean_no_outliers)
+model2 <- lm(Diameter_of_tumor ~ AFPcontinuous + MVI, data = metadata_csv_clean_stand_no_outliers)
 residuen <- residuals(model2)
 
 qqnorm(residuen)
 qqline(residuen, col = "red")
 
 #4: No multicollinearity
-model3 <- lm(Diameter_of_tumor ~ AFPcontinuous + MVI, data = metadata_csv_clean_no_outliers)
+model3 <- lm(Diameter_of_tumor ~ AFPcontinuous + MVI, data = metadata_csv_clean_stand_no_outliers)
 install.packages("car")
 library(car)
 vif(model3)
 #These values are below the typical threshold of 10, indicating that there is no significant multicollinearity between AFPcontinuous and MVI in your model. This means that both predictors can be used together without causing issues due to collinearity.
 
 #5: Independence of the residuals (auto-correlation)
-model4 <- lm(Diameter_of_tumor ~ AFPcontinuous + MVI, data = metadata_csv_clean_no_outliers)
+model4 <- lm(Diameter_of_tumor ~ AFPcontinuous + MVI, data = metadata_csv_clean_stand_no_outliers)
 residuals <- residuals(model4)
 
 plot(residuals, 
@@ -488,14 +502,10 @@ Logistic regession model for the tumor diameter, MVI and AFP
 ```{r}
 #Logistic regression model for tumor diameter, AFP and MVI
 model5 <- glm(Diameter_of_tumor ~ AFPcontinuous * MVI, 
-             family = gaussian(link = "identity"), data = metadata_csv_clean_no_outliers)
+             family = gaussian(link = "identity"), data = metadata_csv_clean_stand_no_outliers)
 summary(model5)
 model5$deviance/model5$null.deviance
 
-model6 <- glm(Diameter_of_tumor ~ AFPcontinuous * MVI, 
-             family = Gamma(link = "log"), data = metadata_csv_clean_no_outliers) #Betere R squared. Als Diameter_of_tumor alleen positieve waarden heeft en variabiliteit toeneemt met de grootte van de waarde, kun je een Gamma-verdeling proberen.
-summary(model6)
-model6$deviance/model6$null.deviance
 ```
 The interaction between MVI and AFPcontinuous on the tumor diameter is not significant, because the p-value > 0,05, namely 0,173.
 
