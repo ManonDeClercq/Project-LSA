@@ -192,15 +192,6 @@ which(is.na(abundances_tsv_imputed_filtered$Symbol))
 
 Standardization of data 
 ```{r}
-#Define standardization function
-standardize <- function(x) {
-    if (sd(x) == 0) {
-        return(x)
-    } else {
-        return((x - mean(x)) / sd(x))
-    }
-}
-
 #Copy original dataset
 metadata_csv_clean_stand <- metadata_csv_clean
 
