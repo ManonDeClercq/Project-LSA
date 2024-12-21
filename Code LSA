@@ -157,7 +157,7 @@ abundances_healthy_samples <- abundances_patient_data %>% select(contains("P"))
 abundances_tumor_samples <- abundances_patient_data %>% select(contains("T"))
 
 
-#Function to impute missing values using null imputation
+#Function to impute missing values using mean imputation
 impute_missing <- function(data) {
   data %>% mutate_all(~ na_mean(.))
 }
